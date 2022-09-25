@@ -35,11 +35,11 @@ Set		[Total Murderers] = (Select	Count(Borough)
 --Shows the chance of you meeting a murderer if you walk around the borough in 2021
 
 Select [Area name], [All persons], [Total Murderers], ([Total Murderers]/[All persons])*100 As [Killed Chance]
-, Sum([Total Murderers]) Over (Order by [Total Murderers] Desc) As [London Murder Count]
+, Sum([Total Murderers]) Over (Order by [Area name]) As [London Murder Count]
 From   Borough_Population_Size
 Where [Area name] is not null And [Area name] Not In ('London', 'Inner London', 'Outer London')
 
-
+--Using CTE
 --Shows the chance of meeting a murderer in Greater London in 2021
 
 With MurderPercentLondon ([Area Name], [Total Population], [Total Murderers])
@@ -69,15 +69,29 @@ Group by Killing.[Age Group]
 With YoungKillerPercent ([Murderer Age Group], [No. Murderers])
 As
 (
-Select Killing.[Age Group], Count(*) as [No. Murderers]
-From Borough_Population_Size PopSize
-Join Homicide_Greater_London Killing
-	On PopSize.[Area name] = Killing.Borough
-Group by Killing.[Age Group]
+	Select Killing.[Age Group], Count(*) as [No. Murderers]
+	From Borough_Population_Size PopSize
+	Join Homicide_Greater_London Killing
+		On PopSize.[Area name] = Killing.Borough
+	Group by Killing.[Age Group]
 )
 Select *, (Cast([No. Murderers] As float)/(Select Sum([No. Murderers]) From YoungKillerPercent)) * 100 As [Murderer Percentage]
 From YoungKillerPercent
 
+
+--Shows the relation between date and age of the homicides
+
+With KillingDates ([Month of Murder], [Murderer Age Group], [No. Murderers])
+As
+(
+	Select Killing.[Proceedings Date], Killing.[Age Group], Count(*) as [No. Murderers]
+	From Borough_Population_Size PopSize
+	Join Homicide_Greater_London Killing
+		On PopSize.[Area name] = Killing.Borough
+	Group by Killing.[Age Group], Killing.[Proceedings Date]
+)
+Select *
+From KillingDates
 
 --Using Temp Table to perform Calculation on Partition By in previous query
 --Shows the geological and age distribuition of homicides
@@ -136,8 +150,37 @@ Group by Killing.[Age Group]
 
 
 --Creates View for Age and Borough distribuition for all the murderers in 2021
---Instead of temporary, created a permanent table
+--Instead of temp table, created a permanent table
 
 Create View MurderersAgeGeoDistrib As
 Select *
 From MurdererAgeDistribuition
+
+--Creates View for the Age and Date relationship of the homicides
+
+Create View MurdererAgeDateDistrib As
+With KillingDates ([Month of Murder], [Murderer Age Group], [No. Murderers])
+As
+(
+	Select Killing.[Proceedings Date], Killing.[Age Group], Count(*) as [No. Murderers]
+	From Borough_Population_Size PopSize
+	Join Homicide_Greater_London Killing
+		On PopSize.[Area name] = Killing.Borough
+	Group by Killing.[Age Group], Killing.[Proceedings Date]
+)
+Select *
+From KillingDates
+
+
+--Creates View for the chance of meeting a murderer in Greater London
+
+Create View MurderPercentLondon As
+With MurderPercentLondon ([Area name], [Total Population], [Total Murderers])
+As
+(
+	Select [Area name], [All persons], Sum([Total Murderers]) Over () As [Total Murderers]
+	From   Borough_Population_Size
+)
+Select *, ([Total Murderers]/[Total Population]) * 100 As [Chance of Murder]
+From MurderPercentLondon
+Where [Area name] = 'London'
